@@ -1,0 +1,12 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "main": "test",
+  "scripts": {
+    "test": "mocha scamtokentest.js && mocha managementtest.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
+
