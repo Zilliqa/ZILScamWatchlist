@@ -1,0 +1,181 @@
+scilla_version 0
+
+(***************************************************)
+(*               Associated library                *)
+(***************************************************)
+import IntUtils
+library ScamURL
+
+let one_msg = 
+  fun (msg : Message) => 
+  let nil_msg = Nil {Message} in
+  Cons {Message} msg nil_msg
+
+let two_msgs =
+fun (msg1 : Message) =>
+fun (msg2 : Message) =>
+  let msgs_tmp = one_msg msg2 in
+  Cons {Message} msg1 msgs_tmp
+  
+(* Error events *)
+type Error =
+| CodeIsNotManagementContract
+| CodeURLExists
+| CodeURLNotExists
+| CodeDomainExists
+| CodeDomainNotExists
+
+let make_error =
+  fun (result : Error) =>
+    let result_code = 
+      match result with
+      | CodeIsNotManagementContract => Int32 -1
+      | CodeURLExists               => Int32 -2
+      | CodeURLNotExists            => Int32 -3
+      | CodeDomainExists            => Int32 -4
+      | CodeDomainNotExists         => Int32 -5
+      end
+    in
+    { _exception : "Error"; code : result_code }
+  
+let zero = Uint128 0
+
+(* Dummy user-defined ADT *)
+type Unit =
+| Unit
+
+let get_val =
+  fun (some_val: Option Uint128) =>
+  match some_val with
+  | Some val => val
+  | None => zero
+  end
+
+(***************************************************)
+(*             The contract definition             *)
+(***************************************************)
+
+contract ScamURL
+(
+  contract_owner: ByStr20,
+  name : String,
+  init_management_contract: ByStr20
+)
+
+(* Mutable fields *)
+
+(* mapping between url to category*)
+field urls: Map String String = Emp String String
+
+(* mapping between domain to category*)
+field domains: Map String String = Emp String String
+
+(* management contract*)
+field management_contract: ByStr20 = init_management_contract
+
+(**************************************)
+(*             Procedures             *)
+(**************************************)
+
+procedure ThrowError(err : Error)
+  e = make_error err;
+  throw e
+end
+
+(* @dev:   check if transition is called by management contract.  *)
+(* @param: send_address: Address that sent transition             *)
+procedure IsManagementContract(send_address: ByStr20)
+  curr_management_contract <- management_contract;
+  (*check if sender of transition is the management contract*)
+  is_management_contract = builtin eq send_address curr_management_contract;
+  match is_management_contract with
+  | False =>
+    err = CodeIsNotManagementContract;
+    ThrowError err
+  | True =>
+  end
+end  
+
+(***************************************)
+(*             Transitions             *)
+(***************************************)
+(*Only managers in management contract can call transitions*)
+
+(* @dev:   Change management contract address                               *)
+(* @param: new_management_contract: Address of new management contract.     *)
+transition ChangeManagementContract(new_management_contract: ByStr20)
+  IsManagementContract _sender;
+  management_contract := new_management_contract;
+  e = {_eventname: "ChangedManagementContract"; new_management_contract: new_management_contract};
+  event e  
+end
+
+(* @dev:   Add scamURL to urls.                                 *)
+(* @param: url: URL to be added                                 *)
+(* Returns error event CodeURLExists if url already in urls     *)
+transition AddURL(url: String, category: String)
+  IsManagementContract _sender;
+  some_url <- urls[url];
+  match some_url with
+  | Some val =>
+    err = CodeURLExists;
+    ThrowError err
+  | None =>
+    urls[url] := category;
+    (* Emit success event *)
+    e = {_eventname: "AddURLSuccess"; url: url}
+  end
+end
+
+(* @dev:   remove scamURL from urls.                       *)
+(* @param: url: URL to be removed                          *)
+(* Returns error event CodeURLNotExists if url not in urls *)
+transition RemoveURL(url: String)
+  IsManagementContract _sender;
+  some_url <- urls[url];
+  match some_url with
+  | Some val => 
+    delete urls[url];
+    (* Emit success event *)
+    e = {_eventname: "RemoveURLSuccess"; url: url};
+    event e
+  | None =>
+    err = CodeURLNotExists;
+    ThrowError err
+  end
+end
+
+(* @dev:   Add scamDomain to domains.                                 *)
+(* @param: domain: domain to be added                                 *)
+(* Returns error event DomainURLExists if domain already in domains   *)
+transition AddDomain(domain: String,  category: String)
+  IsManagementContract _sender;
+  some_domain <- domains[domain];
+  match some_domain with
+  | Some val =>
+    err = CodeDomainExists;
+    ThrowError err
+  | None =>
+    domains[domain] := category;
+    (* Emit success event *)
+    e = {_eventname: "AddDomainSuccess"; domain: domain}
+  end
+end
+
+(* @dev:   Remove scamDomain to domains. Only existing managers can remove. *)
+(* @param: domain: domain to be removed                                     *)
+(* Returns error event DomainURLNotExists if domain not in domains          *)
+transition RemoveDomain(domain: String)
+  IsManagementContract _sender;
+  some_domain <- domains[domain];
+  match some_domain with
+  | Some val => 
+    delete domains[domain];
+    (* Emit success event *)
+    e = {_eventname: "RemoveDomainSuccess"; domain: domain};
+    event e
+  | None =>
+    err = CodeDomainNotExists;
+    ThrowError err
+  end
+end
