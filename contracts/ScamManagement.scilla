@@ -1,0 +1,270 @@
+scilla_version 0
+
+(***************************************************)
+(*               Associated library                *)
+(***************************************************)
+import IntUtils
+library ScamManagement
+
+let one_msg = 
+  fun (msg : Message) => 
+  let nil_msg = Nil {Message} in
+  Cons {Message} msg nil_msg
+
+let two_msgs =
+fun (msg1 : Message) =>
+fun (msg2 : Message) =>
+  let msgs_tmp = one_msg msg2 in
+  Cons {Message} msg1 msgs_tmp
+  
+(* Error events *)
+type Error =
+| CodeIsNotManager
+| CodeManagerExists
+| CodeManagerNotExists
+
+
+let make_error =
+  fun (result : Error) =>
+    let result_code = 
+      match result with
+      | CodeIsNotManager     => Int32 -1
+      | CodeManagerExists    => Int32 -2
+      | CodeManagerNotExists => Int32 -3
+      end
+    in
+    { _exception : "Error"; code : result_code }
+  
+let zero = Uint128 0
+
+(* Dummy user-defined ADT *)
+type Unit =
+| Unit
+
+let get_val =
+  fun (some_val: Option Uint128) =>
+  match some_val with
+  | Some val => val
+  | None => zero
+  end
+
+(***************************************************)
+(*             The contract definition             *)
+(***************************************************)
+
+contract ScamManagement
+(
+  contract_owner: ByStr20,
+  name : String,
+  init_scam_token_address: ByStr20,
+  init_scam_url_address: ByStr20,
+  init_manager_tracking_address: ByStr20,
+  init_manager: ByStr20
+)
+
+(* Mutable fields *)
+
+(* List of minters available *)
+field managers: Map ByStr20 Unit 
+  = let emp_map = Emp ByStr20 Unit in
+    let authorize = Unit in
+    builtin put emp_map init_manager authorize
+    
+field scam_token_address: ByStr20 = init_scam_token_address
+
+field scam_url_address: ByStr20 = init_scam_url_address
+
+field manager_tracking_address: ByStr20 = init_manager_tracking_address
+(**************************************)
+(*             Procedures             *)
+(**************************************)
+
+procedure ThrowError(err : Error)
+  e = make_error err;
+  throw e
+end
+
+(* @dev:   Checks if address is in manager list                   *)
+(* @param: manager: Address of the manager to be checked          *)
+(* Returns error event CodeIsNotManager if manager is not in list *)
+procedure isManager(address: ByStr20)
+  some_manager <- managers[address];
+  match some_manager with
+  | None =>
+    err = CodeIsNotManager;
+    ThrowError err   
+  | Some Unit => 
+  end
+end
+
+(***************************************)
+(*             Transitions             *)
+(***************************************)
+
+(* @dev:   Add approved managers. Only existing managers can add managers. *)
+(* @param: manager: Address of the manager to be approved                  *)
+(* Returns error event CodeManagerExists if manager already approved       *)
+transition addManagers(manager: ByStr20)
+  isManager _sender;
+  some_manager <- managers[manager];
+  match some_manager with
+  | Some Unit => 
+    err = CodeManagerExists;
+    ThrowError err
+  | None =>
+    authorize = Unit;
+    managers[manager] := authorize;
+    (* Emit success event *)
+    e = {_eventname: "AddManagerSuccess"; manager: manager};
+    event e
+  end
+end
+
+(* @dev:   Remove approved managers. Only existing managers can remove managers. *)
+(* @param: manager: Address of the manager to be remove                          *)
+(* Returns error event CodeManagerNotExists if manager is already not approved   *)
+transition removeManagers(manager: ByStr20)
+  isManager _sender;
+  some_manager <- managers[manager];
+  match some_manager with
+  | Some Unit => 
+    delete managers[manager];
+    (* Emit success event *)
+    e = {_eventname: "RemoveManagerSuccess"; manager: manager};
+    event e
+  | None =>
+    err = CodeManagerNotExists;
+    ThrowError err
+  end
+end
+
+(* @dev:   Change scam_token_address field to new_scam_token_address   *)
+(* @param: new_scam_token_address: scam token address to be changed to *)
+transition ChangeScamTokenAddress(new_scam_token_address: ByStr20)
+  isManager _sender;
+  scam_token_address := new_scam_token_address;
+  e = {_eventname: "ChangedScamTokenAddress"; new_scam_token_address: new_scam_token_address};
+  event e  
+end
+
+(* @dev:   Change scam_url_address field to new_scam_url_address   *)
+(* @param: new_scam_url_address: scam url address to be changed to *)
+transition ChangeScamURLAddress(new_scam_url_address: ByStr20)
+  isManager _sender;
+  scam_url_address := new_scam_url_address;
+  e = {_eventname: "ChangedScamURLAddress"; new_scam_url_address: new_scam_url_address};
+  event e  
+end
+
+(* @dev:   Change manager_tracking_address field to new_manager_tracking_address   *)
+(* @param: new_manager_tracking_address: new manager_tracking address to be changed to *)
+transition ChangeManagerTrackingAddress(new_manager_tracking_address: ByStr20)
+  isManager _sender;
+  manager_tracking_address := new_manager_tracking_address;
+  e = {_eventname: "ChangedManagerTrackingAddress"; new_manager_tracking_address: new_manager_tracking_address};
+  event e  
+end
+
+(* call transitions in ScamToken contract*)
+
+(*Change all 3 contracts' management contract to new_management_contract*)
+transition CallChangeManagementContract(new_management_contract: ByStr20)
+  isManager _sender;
+  token_address <- scam_token_address;
+  msg_to_scam_token = {_tag: "ChangeManagementContract"; _recipient: token_address; _amount: zero; 
+  new_management_contract: new_management_contract};
+  url_address <- scam_url_address;
+  msg_to_scam_url = {_tag: "ChangeManagementContract"; _recipient: url_address; _amount: zero; 
+  new_management_contract: new_management_contract};
+  tracking_address <- manager_tracking_address;
+  msg_to_manager_tracking = {_tag: "ChangeManagementContract"; _recipient: tracking_address; _amount: zero; 
+  new_management_contract: new_management_contract};
+  msges = two_msgs msg_to_scam_token msg_to_scam_url;
+  send msges;
+  msg = one_msg msg_to_manager_tracking;
+  send msg
+end
+
+transition callMint(recipient: ByStr20, amount: Uint128)
+  isManager _sender;
+  address <- scam_token_address;
+  msg_to_scam_token = {_tag: "Mint"; _recipient: address; _amount: zero; recipient: recipient; amount: amount};
+  msgs = one_msg msg_to_scam_token;
+  send msgs
+end
+
+transition callBurn(burn_account: ByStr20, amount: Uint128)
+  isManager _sender;
+  address <- scam_token_address;
+  msg_to_scam_token = {_tag : "Burn"; _recipient : address; _amount : zero; 
+                    burn_account : burn_account; amount : amount};
+  msgs = one_msg msg_to_scam_token;
+  send msgs
+end
+
+transition callTransfer(from: ByStr20, to: ByStr20, amount: Uint128)
+  isManager _sender;
+  address <- scam_token_address;
+  msg_to_scam_token = {_tag : "Transfer"; _recipient : address; _amount : zero; 
+                  from: from; to : to; amount : amount};
+  msgs = one_msg msg_to_scam_token;
+  send msgs
+end
+
+(* call transitions in ScamURL contract*)
+
+transition callAddURL(url: String, category: String)
+  isManager _sender;
+  address <- scam_url_address;
+  msg_to_scam_url = {_tag : "AddURL"; _recipient : address; _amount : zero; 
+                  url: url; category: category};
+  msgs = one_msg msg_to_scam_url;
+  send msgs
+end
+
+transition callRemoveURL(url: String)
+  isManager _sender;
+  address <- scam_url_address;
+  msg_to_scam_url = {_tag : "RemoveURL"; _recipient : address; _amount : zero; 
+                  url: url};
+  msgs = one_msg msg_to_scam_url;
+  send msgs
+end
+
+transition callAddDomain(domain: String, category: String)
+  isManager _sender;
+  address <- scam_url_address;
+  msg_to_scam_url = {_tag : "AddDomain"; _recipient : address; _amount : zero; 
+                  domain: domain; category: category};
+  msgs = one_msg msg_to_scam_url;
+  send msgs
+end
+
+transition callRemoveDomain(domain: String)
+  isManager _sender;
+  address <- scam_url_address;
+  msg_to_scam_url = {_tag : "RemoveDomain"; _recipient : address; _amount : zero; 
+                  domain: domain};
+  msgs = one_msg msg_to_scam_url;
+  send msgs
+end
+
+(* call transitions in ManagerTracking contract*)
+
+transition callAddAdmin(user_id: String, role: String)
+  isManager _sender;
+  address <- manager_tracking_address;
+  msg_to_manager_tracking = {_tag : "AddAdmin"; _recipient : address; _amount : zero; 
+                  user_id: user_id; role: role};
+  msgs = one_msg msg_to_manager_tracking;
+  send msgs
+end
+
+transition callRemoveAdmin(user_id: String)
+  isManager _sender;
+  address <- manager_tracking_address;
+  msg_to_manager_tracking = {_tag : "RemoveAdmin"; _recipient : address; _amount : zero; 
+                  user_id: user_id};
+  msgs = one_msg msg_to_manager_tracking;
+  send msgs
+end
