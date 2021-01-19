@@ -1,0 +1,138 @@
+scilla_version 0
+
+(***************************************************)
+(*               Associated library                *)
+(***************************************************)
+import IntUtils
+library ManagerTracking
+
+let one_msg = 
+  fun (msg : Message) => 
+  let nil_msg = Nil {Message} in
+  Cons {Message} msg nil_msg
+
+let two_msgs =
+fun (msg1 : Message) =>
+fun (msg2 : Message) =>
+  let msgs_tmp = one_msg msg2 in
+  Cons {Message} msg1 msgs_tmp
+
+(* Error events *)
+type Error =
+| CodeIsNotManagementContract
+| CodeAdminExists
+| CodeAdminNotExists
+
+let make_error =
+  fun (result : Error) =>
+    let result_code = 
+      match result with
+      | CodeIsNotManagementContract => Int32 -1
+      | CodeAdminExists             => Int32 -2
+      | CodeAdminNotExists          => Int32 -3
+      end
+    in
+    { _exception : "Error"; code : result_code }
+  
+let zero = Uint128 0
+
+(* Dummy user-defined ADT *)
+type Unit =
+| Unit
+
+let get_val =
+  fun (some_val: Option Uint128) =>
+  match some_val with
+  | Some val => val
+  | None => zero
+  end
+
+(***************************************************)
+(*             The contract definition             *)
+(***************************************************)
+
+contract ManagerTracking
+(
+  contract_owner: ByStr20,
+  name : String,
+  init_management_contract: ByStr20
+)
+
+(* Mutable fields *)
+
+(* mapping between admin to role*)
+field admins: Map String String = Emp String String
+
+(* management contract*)
+field management_contract: ByStr20 = init_management_contract
+
+(**************************************)
+(*             Procedures             *)
+(**************************************)
+
+procedure ThrowError(err : Error)
+  e = make_error err;
+  throw e
+end
+
+(* @dev:   check if transition is called by management contract.  *)
+(* @param: send_address: Address that sent transition             *)
+procedure IsManagementContract(send_address: ByStr20)
+  curr_management_contract <- management_contract;
+  (*check if sender of transition is the management contract*)
+  is_management_contract = builtin eq send_address curr_management_contract;
+  match is_management_contract with
+  | False =>
+    err = CodeIsNotManagementContract;
+    ThrowError err
+  | True =>
+  end
+end  
+
+(***************************************)
+(*             Transitions             *)
+(***************************************)
+(*Only managers in management contract can call transitions*)
+
+(* @dev:   Change management contract.                                   *)
+(* @param: new_management_contract: Address of new management contract.  *)
+transition ChangeManagementContract(new_management_contract: ByStr20)
+  IsManagementContract _sender;
+  management_contract := new_management_contract;
+  e = {_eventname: "ChangedManagementContract"; new_management_contract: new_management_contract};
+  event e  
+end
+
+(* @dev:   Add user_id to admins.                                       *)
+(* @param: user_id: user_id to be added                                 *)
+(* Returns error event CodeAdminExists if user_id already in admins     *)
+transition AddAdmin(user_id: String, role: String)
+  IsManagementContract _sender;
+  some_user_id <- admins[user_id];
+  match some_user_id with
+  | Some val =>
+    err = CodeAdminExists;
+    ThrowError err
+  | None =>
+    admins[user_id]:= role
+  end
+end
+
+(* @dev:   Remove user_id to admins. Only existing managers can remove. *)
+(* @param: user_id: user_id to be removed                               *)
+(* Returns error event CodeAdminNotExists if user_id not in admins      *)
+transition RemoveAdmin(user_id: String)
+  IsManagementContract _sender;
+  some_user_id <- admins[user_id];
+  match some_user_id with
+  | Some val => 
+    delete admins[user_id];
+    (* Emit success event *)
+    e = {_eventname: "RemoveAdminSuccess"; user_id: user_id};
+    event e
+  | None =>
+    err = CodeAdminNotExists;
+    ThrowError err
+  end
+end
+

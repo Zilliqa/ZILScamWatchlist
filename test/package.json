@@ -1,0 +1,12 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "main": "test",
+  "scripts": {
+    "test": "mocha -timeout 100000 scamtokentest.js && mocha -timeout 100000 scamurltest.js && mocha -timeout 100000 managertrackingtest.js && mocha -timeout 100000 managementtest.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
+
