@@ -8,7 +8,7 @@ Only Managers can call
 ## ScamToken
 Fungible tokens to be transferred to/ minted for addresses that are known to be involved in scams
 
-## URL
+## ScamURL
 Tracks URLs and domains involved in scams
 
 ## ManagerTracking
