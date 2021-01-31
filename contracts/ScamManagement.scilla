@@ -17,6 +17,13 @@ fun (msg2 : Message) =>
   let msgs_tmp = one_msg msg2 in
   Cons {Message} msg1 msgs_tmp
   
+let three_msgs =
+fun (msg1 : Message) =>
+fun (msg2 : Message) =>
+fun (msg3 : Message) =>
+  let msgs_tmp = two_msgs msg2 msg3 in
+  Cons {Message} msg1 msgs_tmp
+  
 (* Error events *)
 type Error =
 | CodeIsNotManager
@@ -54,8 +61,6 @@ let get_val =
 
 contract ScamManagement
 (
-  contract_owner: ByStr20,
-  name : String,
   init_scam_token_address: ByStr20,
   init_scam_url_address: ByStr20,
   init_manager_tracking_address: ByStr20,
@@ -93,7 +98,7 @@ procedure isManager(address: ByStr20)
   | None =>
     err = CodeIsNotManager;
     ThrowError err   
-  | Some Unit => 
+  | Some val => 
   end
 end
 
@@ -108,7 +113,7 @@ transition addManagers(manager: ByStr20)
   isManager _sender;
   some_manager <- managers[manager];
   match some_manager with
-  | Some Unit => 
+  | Some val => 
     err = CodeManagerExists;
     ThrowError err
   | None =>
@@ -127,7 +132,7 @@ transition removeManagers(manager: ByStr20)
   isManager _sender;
   some_manager <- managers[manager];
   match some_manager with
-  | Some Unit => 
+  | Some val => 
     delete managers[manager];
     (* Emit success event *)
     e = {_eventname: "RemoveManagerSuccess"; manager: manager};
@@ -165,11 +170,20 @@ transition ChangeManagerTrackingAddress(new_manager_tracking_address: ByStr20)
   event e  
 end
 
+transition ConfirmChangeManagementContract(initiator: ByStr20)
+  isManager initiator
+end
+
 (* call transitions in ScamToken contract*)
 
 (*Change all 3 contracts' management contract to new_management_contract*)
 transition CallChangeManagementContract(new_management_contract: ByStr20)
   isManager _sender;
+  msg_to_new_contract = {_tag: "ConfirmChangeManagementContract"; _recipient: new_management_contract; _amount: zero;
+                        initiator: _sender};
+  token_address <- scam_token_address;
+  msg = one_msg msg_to_new_contract;
+  send msg;
   token_address <- scam_token_address;
   msg_to_scam_token = {_tag: "ChangeManagementContract"; _recipient: token_address; _amount: zero; 
   new_management_contract: new_management_contract};
@@ -179,10 +193,8 @@ transition CallChangeManagementContract(new_management_contract: ByStr20)
   tracking_address <- manager_tracking_address;
   msg_to_manager_tracking = {_tag: "ChangeManagementContract"; _recipient: tracking_address; _amount: zero; 
   new_management_contract: new_management_contract};
-  msges = two_msgs msg_to_scam_token msg_to_scam_url;
-  send msges;
-  msg = one_msg msg_to_manager_tracking;
-  send msg
+  msges = three_msgs msg_to_scam_token msg_to_scam_url msg_to_manager_tracking;
+  send msges
 end
 
 transition callMint(recipient: ByStr20, amount: Uint128)
@@ -202,11 +214,20 @@ transition callBurn(burn_account: ByStr20, amount: Uint128)
   send msgs
 end
 
-transition callTransfer(from: ByStr20, to: ByStr20, amount: Uint128)
+transition callTransfer(to: ByStr20, amount: Uint128, initiator: ByStr20)
   isManager _sender;
   address <- scam_token_address;
   msg_to_scam_token = {_tag : "Transfer"; _recipient : address; _amount : zero; 
-                  from: from; to : to; amount : amount};
+                  to : to; amount : amount; initiator: initiator};
+  msgs = one_msg msg_to_scam_token;
+  send msgs
+end
+
+transition callTransferFrom(from: ByStr20, to: ByStr20, amount: Uint128, initiator: ByStr20)
+  isManager _sender;
+  address <- scam_token_address;
+  msg_to_scam_token = {_tag : "TransferFrom"; _recipient : address; _amount : zero; 
+                  from: from; to : to; amount : amount; initiator: initiator};
   msgs = one_msg msg_to_scam_token;
   send msgs
 end

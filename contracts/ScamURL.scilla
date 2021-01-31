@@ -57,8 +57,6 @@ let get_val =
 
 contract ScamURL
 (
-  contract_owner: ByStr20,
-  name : String,
   init_management_contract: ByStr20
 )
 

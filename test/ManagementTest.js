@@ -9,6 +9,7 @@ let deployedScamTokenAddress = "";
 let deployedScamURLAddress = "";
 let deployedManagerTrackingAddress = "";
 let deployedManagementAddress = "";
+let deployedManagementAddress2 = "";
 
 // Save the deployed address here for later use
 const scamTokenContract = fs.readFileSync("../contracts/scamtoken.scilla").toString();
@@ -22,6 +23,7 @@ describe('Management', function () {
   let deployedScamURL = "";
   let deployedManagerTracking = "";
   let deployedManagement = "";
+  let deployedManagement2 = "";
   let acc0 = "";
   let acc1 = "";
   let acc2 = "";
@@ -79,8 +81,6 @@ describe('Management', function () {
     const [tx, deployed] = await preparedContract.deploy(
       acc0,
       {
-        contract_owner: acc0,
-        name: "ScamURL",
         init_management_contract: acc0
       }
     );
@@ -99,8 +99,6 @@ describe('Management', function () {
     const [tx, deployed] = await preparedContract.deploy(
       acc0,
       {
-        contract_owner: acc0,
-        name: "ManagerTracking",
         init_management_contract: acc0
       }
     );
@@ -116,11 +114,9 @@ describe('Management', function () {
   it('Deploy Management contract', async function () {
     const preparedManagementContract = Test.contracts[3];
 
-    const [tx2, deployed] = await preparedManagementContract.deploy(
+    const [tx, deployed] = await preparedManagementContract.deploy(
       acc2,
       {
-        contract_owner: acc2,
-        name : "Management",
         init_scam_token_address: deployedScamTokenAddress,
         init_scam_url_address: deployedScamURLAddress,
         init_manager_tracking_address: deployedManagerTrackingAddress,
@@ -128,7 +124,7 @@ describe('Management', function () {
       }
     );
 
-    assert(tx2.receipt.success === true);
+    assert(tx.receipt.success === true);
 
     // Save for later use
     deployedManagementAddress = deployed.address;
@@ -139,8 +135,8 @@ describe('Management', function () {
     //assert(state.managers.has(Test.accounts[2].address.toLowerCase()));
     const callTx = await deployedManagement.addManagers(acc2, { manager: acc3});
     assert(callTx.receipt.success === true);
-    const state2 = await deployedManagement.getState();
-    assert(state2.managers[acc3.toLowerCase()].constructor.toLowerCase()==='unit');
+    const state = await deployedManagement.getState();
+    assert(state.managers[acc3.toLowerCase()].constructor.toLowerCase()==='unit');
     
   });
 
@@ -175,14 +171,53 @@ describe('Management', function () {
 
   });
 
-  it('Calls Mint transition in ScamTokenContract', async function () {
-    const callTx2 = await deployedManagement.callMint(acc2, { recipient: acc2, amount: "1000" });
-    assert(callTx2.receipt.success === true);
+  it('Cant change management contract if new management contract does not have same manager', async function () {
+    //Deploy new managementContract with acc3 is only manager
+    const preparedManagementContract = Test.contracts[3];
+
+    const [tx, deployed] = await preparedManagementContract.deploy(
+      acc3,
+      {
+        init_scam_token_address: deployedScamTokenAddress,
+        init_scam_url_address: deployedScamURLAddress,
+        init_manager_tracking_address: deployedManagerTrackingAddress,
+        init_manager: acc3
+      }
+    );
+
+    assert(tx.receipt.success === true);
+    deployedManagementAddress2 = deployed.address;
+    deployedManagement2 = Test.deployedContracts[deployedManagementAddress2];
+
+    //Try change managementContract to new managementContract with acc2. Should fail
+    const callTx = await deployedManagement.CallChangeManagementContract(acc2, {new_management_contract: deployedManagementAddress2});
+    assert(callTx.receipt.success === false);
+    //new managementContract adds acc2 to managers. Then try change managementContract to new managementContract again with acc2
+    const callTx2 = await deployedManagement2.addManagers(acc3, {manager: acc2});
+    const callTx3 = await deployedManagement.CallChangeManagementContract(acc2, {new_management_contract: deployedManagementAddress2});
+    assert(callTx3.receipt.success === true);
     const state = await deployedScamToken.getState();
-    assert(state.balances[acc2.toLowerCase()]=== "1000");
+    const state2 = await deployedScamURL.getState();
+    const state3 = await deployedManagerTracking.getState();
+    assert(state.management_contract === deployedManagementAddress2.toLowerCase());
+    assert(state2.management_contract === deployedManagementAddress2.toLowerCase());
+    assert(state3.management_contract === deployedManagementAddress2.toLowerCase());
+    //change back to old managementContract
+    const callTx4 = await deployedManagement2.CallChangeManagementContract(acc2, {new_management_contract: deployedManagementAddress});
+    assert(callTx4.receipt.success === true);
+
+  });
+
+  it('Calls Mint transition in ScamTokenContract', async function () {
+    //acc0: 10000
+    const callTx = await deployedManagement.callMint(acc2, { recipient: acc2, amount: "2000" });
+    assert(callTx.receipt.success === true);
+    const state = await deployedScamToken.getState();
+    assert(state.balances[acc2.toLowerCase()]=== "2000");
   });
 
   it('Calls Burn transition in ScamTokenContract', async function () {
+    //acc0: 10000, acc2: 2000
     const callTx = await deployedManagement.callBurn(acc2, { burn_account: acc0, amount: "1000" });
     assert(callTx.receipt.success === true);
     const state = await deployedScamToken.getState();
@@ -190,16 +225,28 @@ describe('Management', function () {
   });
 
   it('Calls Transfer transition in ScamTokenContract', async function () {
-    const callTx = await deployedManagement.callTransfer(acc2, { from: acc2, to: acc0, amount: "500" });
+    //acc0: 9000, acc2: 2000
+    const callTx = await deployedManagement.callTransfer(acc2, { to: acc0, amount: "1000", initiator: acc2});
     assert(callTx.receipt.success === true);
     const state = await deployedScamToken.getState();
-    assert(state.balances[acc0.toLowerCase()]=== "9500");
+    assert(state.balances[acc0.toLowerCase()]=== "10000");
+    assert(state.balances[acc2.toLowerCase()]=== "1000");
+  });
+
+  it('Calls Transfer from transition in ScamTokenContract', async function () {
+    //acc0: 10000, acc2: 1000
+    const callTx = await deployedManagement.callMint(acc2, { recipient: acc1, amount: "1000" });
+    //acc0: 10000, acc1: 1000 acc2: 1000
+    const callTx2 = await deployedManagement.callTransferFrom(acc2, { from: acc2, to: acc1, amount: "500", initiator: acc2});
+    assert(callTx2.receipt.success === true);
+    const state = await deployedScamToken.getState();
+    assert(state.balances[acc1.toLowerCase()]=== "1500");
     assert(state.balances[acc2.toLowerCase()]=== "500");
   });
 
   it('Calls AddURL transition in ScamURLContract', async function () {
-    const callTx2 = await deployedManagement.callAddURL(acc2, { url: "google.com/horses", category: "phishing" });
-    assert(callTx2.receipt.success === true);
+    const callTx = await deployedManagement.callAddURL(acc2, { url: "google.com/horses", category: "phishing" });
+    assert(callTx.receipt.success === true);
     const state = await deployedScamURL.getState();
     assert(state.urls["google.com/horses"]=== "phishing");
   });
@@ -226,15 +273,15 @@ describe('Management', function () {
   });
 
   it('Calls AddAdmin transition in ManagerTrackingContract', async function () {
-    const callTx2 = await deployedManagement.callAddAdmin(acc2, { user_id: "Amrit", role: "President" });
-    assert(callTx2.receipt.success === true);
+    const callTx = await deployedManagement.callAddAdmin(acc2, { user_id: "Amrit", role: "President" });
+    assert(callTx.receipt.success === true);
     const state = await deployedManagerTracking.getState();
     assert(state.admins["Amrit"] === "President");
   });
 
   it('Calls RemoveAdmin transition in ManagerTrackingContract', async function () {
-    const callTx2 = await deployedManagement.callRemoveAdmin(acc2, { user_id: "Amrit" });
-    assert(callTx2.receipt.success === true);
+    const callTx = await deployedManagement.callRemoveAdmin(acc2, { user_id: "Amrit" });
+    assert(callTx.receipt.success === true);
     const state = await deployedManagerTracking.getState();
     expect(state.admins).to.not.have.property("Amrit");
   });

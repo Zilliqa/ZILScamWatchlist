@@ -92,61 +92,92 @@ describe('ScamToken', function () {
   });
 
   it('Mint 1000 tokens twice to same recipient, total supply should be 13000 after', async function () {
+    //acc0: 10000 acc1: 1000
     const callTx = await scamToken.Mint(acc0, { recipient: acc1, amount: "1000" });
     assert(callTx.receipt.success === true);
     const callTx2 = await scamToken.Mint(acc0, { recipient: acc1, amount: "1000" });
     assert(callTx2.receipt.success === true);
     const state = await scamToken.getState();
     assert(state.balances[acc1.toLowerCase()] === '3000');
+    // acc1 should have 3000
     assert(state.total_supply === '13000');
   });
 
   it('Fail if Mint is called by non-management-contract', async function () {
+    //acc0: 10000 acc1: 3000
     const callTx = await scamToken.call(acc1, 'Mint', { recipient: acc0, amount: "1000" });
     assert(callTx.receipt.success === false);
   });
 
   //test Burn
   it('Burn 1000 tokens, total supply should be 12000 after', async function () {
+    //acc0: 10000 acc1: 3000
     const callTx = await scamToken.call(acc0, 'Burn', { burn_account: acc0, amount: "1000" });
     assert(callTx.receipt.success === true);
     const state = await scamToken.getState();
+    // acc0 should have 9000
     assert(state.balances[acc0.toLowerCase()] === '9000');
     assert(state.total_supply === '12000');
   });
 
   it('Fail if Burn is called by non-management-contract', async function () {
+    //acc0: 9000 acc1: 3000
     const callTx = await scamToken.call(acc1, 'Burn', { burn_account: acc0, amount: "1000" });
     assert(callTx.receipt.success === false);
   });
 
   it('Fail if burn tokens from tokenless address', async function () {
+    //acc0: 9000 acc1: 3000
     const callTx = await scamToken.call(acc0, 'Burn', { burn_account: acc2, amount: "1000" });
     assert(callTx.receipt.success === false);
   });
 
   it('Fail if burn tokens from address with less tokens than burn amount', async function () {
+    //acc0: 9000 acc1: 3000
     const callTx = await scamToken.call(acc0, 'Burn', { burn_account: acc0, amount: "10000" });
     assert(callTx.receipt.success === false);
   });
 
   //test Transfer
-  it('Transfer 1000 tokens from one account to another', async function() {
-    const callTx = await scamToken.Transfer(acc0, { from: acc0, to: acc1, amount: "1000" });
+  it('Transfer 1000 tokens from sender to another', async function() {
+    //acc0: 9000 acc1: 3000
+    const callTx = await scamToken.Transfer(acc0, { to: acc2, amount: "2000", initiator: acc0});
     const state = await scamToken.getState();
-    // Sender should have 8000
-    assert(state.balances[acc0.toLowerCase()] === '8000');
-    // Recipient should have 4000
-    assert(state.balances[acc1.toLowerCase()] === '4000');
+    assert(state.balances[acc0.toLowerCase()] === '7000');
+    // acc2 should have 1000
+    assert(state.balances[acc2.toLowerCase()] === '2000');
   });
 
   it('Fail transfer if sender not management-contract', async function() {
-    const callTx = await scamToken.Transfer(acc1, { from: acc1, to: acc0, amount: "1000" });
+    //acc0: 7000 acc1: 3000 acc2: 2000
+    const callTx = await scamToken.Transfer(acc1, {to: acc0, amount: "1000", initiator: acc1});
     assert(callTx.receipt.success === false);
   });
 
   it('Fail transfer if sender balance lower than amount', async function() {
-    const callTx = await scamToken.Transfer(acc0, { from: acc0, to: acc1, amount: "10000" });
+    //acc0: 7000 acc1: 3000 acc2: 2000
+    const callTx = await scamToken.Transfer(acc0, {to: acc1, amount: "10000", initiator: acc0});
+    assert(callTx.receipt.success === false);
+  });
+
+  //test TransferFrom
+  it('Transfer 1000 tokens from one account to another', async function() {
+    //acc0: 7000 acc1: 3000 acc2: 2000
+    const callTx = await scamToken.TransferFrom(acc0, { from: acc1, to: acc2, amount: "1000", initiator: acc0});
+    const state = await scamToken.getState();
+    // acc1 should have 2000
+    assert(state.balances[acc1.toLowerCase()] === '2000');
+    // acc2 should have 3000
+    assert(state.balances[acc2.toLowerCase()] === '3000');
+  });
+
+  it('Fail transfer if sender not management-contract', async function() {
+    const callTx = await scamToken.TransferFrom(acc1, {from: acc1, to: acc0, amount: "1000", initiator: acc1});
+    assert(callTx.receipt.success === false);
+  });
+
+  it('Fail transfer if sender balance lower than amount', async function() {
+    const callTx = await scamToken.TransferFrom(acc0, {from: acc0, to: acc1, amount: "10000", initiator: acc0});
     assert(callTx.receipt.success === false);
   });
 });

@@ -45,8 +45,6 @@ describe('ScamURL', function () {
     const [tx, deployed] = await preparedContract.deploy(
       acc0,
       {
-        contract_owner: acc0,
-        name: "ScamURL",
         init_management_contract: acc0
       }
     );
