@@ -109,7 +109,7 @@ end
 (* @dev:   Add approved managers. Only existing managers can add managers. *)
 (* @param: manager: Address of the manager to be approved                  *)
 (* Returns error event CodeManagerExists if manager already approved       *)
-transition addManagers(manager: ByStr20)
+transition AddManagers(manager: ByStr20)
   isManager _sender;
   some_manager <- managers[manager];
   match some_manager with
@@ -128,7 +128,7 @@ end
 (* @dev:   Remove approved managers. Only existing managers can remove managers. *)
 (* @param: manager: Address of the manager to be remove                          *)
 (* Returns error event CodeManagerNotExists if manager is already not approved   *)
-transition removeManagers(manager: ByStr20)
+transition RemoveManagers(manager: ByStr20)
   isManager _sender;
   some_manager <- managers[manager];
   match some_manager with
@@ -170,20 +170,11 @@ transition ChangeManagerTrackingAddress(new_manager_tracking_address: ByStr20)
   event e  
 end
 
-transition ConfirmChangeManagementContract(initiator: ByStr20)
-  isManager initiator
-end
-
 (* call transitions in ScamToken contract*)
 
 (*Change all 3 contracts' management contract to new_management_contract*)
 transition CallChangeManagementContract(new_management_contract: ByStr20)
   isManager _sender;
-  msg_to_new_contract = {_tag: "ConfirmChangeManagementContract"; _recipient: new_management_contract; _amount: zero;
-                        initiator: _sender};
-  token_address <- scam_token_address;
-  msg = one_msg msg_to_new_contract;
-  send msg;
   token_address <- scam_token_address;
   msg_to_scam_token = {_tag: "ChangeManagementContract"; _recipient: token_address; _amount: zero; 
   new_management_contract: new_management_contract};
@@ -197,7 +188,7 @@ transition CallChangeManagementContract(new_management_contract: ByStr20)
   send msges
 end
 
-transition callMint(recipient: ByStr20, amount: Uint128)
+transition CallMint(recipient: ByStr20, amount: Uint128)
   isManager _sender;
   address <- scam_token_address;
   msg_to_scam_token = {_tag: "Mint"; _recipient: address; _amount: zero; recipient: recipient; amount: amount};
@@ -205,7 +196,7 @@ transition callMint(recipient: ByStr20, amount: Uint128)
   send msgs
 end
 
-transition callBurn(burn_account: ByStr20, amount: Uint128)
+transition CallBurn(burn_account: ByStr20, amount: Uint128)
   isManager _sender;
   address <- scam_token_address;
   msg_to_scam_token = {_tag : "Burn"; _recipient : address; _amount : zero; 
@@ -214,27 +205,9 @@ transition callBurn(burn_account: ByStr20, amount: Uint128)
   send msgs
 end
 
-transition callTransfer(to: ByStr20, amount: Uint128, initiator: ByStr20)
-  isManager _sender;
-  address <- scam_token_address;
-  msg_to_scam_token = {_tag : "Transfer"; _recipient : address; _amount : zero; 
-                  to : to; amount : amount; initiator: initiator};
-  msgs = one_msg msg_to_scam_token;
-  send msgs
-end
-
-transition callTransferFrom(from: ByStr20, to: ByStr20, amount: Uint128, initiator: ByStr20)
-  isManager _sender;
-  address <- scam_token_address;
-  msg_to_scam_token = {_tag : "TransferFrom"; _recipient : address; _amount : zero; 
-                  from: from; to : to; amount : amount; initiator: initiator};
-  msgs = one_msg msg_to_scam_token;
-  send msgs
-end
-
 (* call transitions in ScamURL contract*)
 
-transition callAddURL(url: String, category: String)
+transition CallAddURL(url: String, category: String)
   isManager _sender;
   address <- scam_url_address;
   msg_to_scam_url = {_tag : "AddURL"; _recipient : address; _amount : zero; 
@@ -243,7 +216,7 @@ transition callAddURL(url: String, category: String)
   send msgs
 end
 
-transition callRemoveURL(url: String)
+transition CallRemoveURL(url: String)
   isManager _sender;
   address <- scam_url_address;
   msg_to_scam_url = {_tag : "RemoveURL"; _recipient : address; _amount : zero; 
@@ -252,7 +225,7 @@ transition callRemoveURL(url: String)
   send msgs
 end
 
-transition callAddDomain(domain: String, category: String)
+transition CallAddDomain(domain: String, category: String)
   isManager _sender;
   address <- scam_url_address;
   msg_to_scam_url = {_tag : "AddDomain"; _recipient : address; _amount : zero; 
@@ -261,7 +234,7 @@ transition callAddDomain(domain: String, category: String)
   send msgs
 end
 
-transition callRemoveDomain(domain: String)
+transition CallRemoveDomain(domain: String)
   isManager _sender;
   address <- scam_url_address;
   msg_to_scam_url = {_tag : "RemoveDomain"; _recipient : address; _amount : zero; 
@@ -272,7 +245,7 @@ end
 
 (* call transitions in ManagerTracking contract*)
 
-transition callAddAdmin(user_id: String, role: String)
+transition CallAddAdmin(user_id: String, role: String)
   isManager _sender;
   address <- manager_tracking_address;
   msg_to_manager_tracking = {_tag : "AddAdmin"; _recipient : address; _amount : zero; 
@@ -281,7 +254,7 @@ transition callAddAdmin(user_id: String, role: String)
   send msgs
 end
 
-transition callRemoveAdmin(user_id: String)
+transition CallRemoveAdmin(user_id: String)
   isManager _sender;
   address <- manager_tracking_address;
   msg_to_manager_tracking = {_tag : "RemoveAdmin"; _recipient : address; _amount : zero; 

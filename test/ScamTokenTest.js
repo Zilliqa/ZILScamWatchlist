@@ -137,7 +137,7 @@ describe('ScamToken', function () {
     const callTx = await scamToken.call(acc0, 'Burn', { burn_account: acc0, amount: "10000" });
     assert(callTx.receipt.success === false);
   });
-
+/*
   //test Transfer
   it('Transfer 1000 tokens from sender to another', async function() {
     //acc0: 9000 acc1: 3000
@@ -179,5 +179,5 @@ describe('ScamToken', function () {
   it('Fail transfer if sender balance lower than amount', async function() {
     const callTx = await scamToken.TransferFrom(acc0, {from: acc0, to: acc1, amount: "10000", initiator: acc0});
     assert(callTx.receipt.success === false);
-  });
+  });*/
 });
