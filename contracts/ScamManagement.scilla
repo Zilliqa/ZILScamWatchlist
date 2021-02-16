@@ -173,7 +173,35 @@ end
 (* call transitions in ScamToken contract*)
 
 (*Change all 3 contracts' management contract to new_management_contract*)
-transition CallChangeManagementContract(new_management_contract: ByStr20)
+transition CallChangeScamManagementContract(new_management_contract: ByStr20)
+  isManager _sender;
+  token_address <- scam_token_address;
+  msg_to_scam_token = {_tag: "ChangeManagementContract"; _recipient: token_address; _amount: zero; 
+  new_management_contract: new_management_contract};
+  msgs = one_msg msg_to_scam_token;
+  send msgs
+end
+
+transition CallChangeScamURLManagementContract(new_management_contract: ByStr20)
+  isManager _sender;
+  url_address <- scam_url_address;
+  msg_to_scam_url = {_tag: "ChangeManagementContract"; _recipient: url_address; _amount: zero; 
+  new_management_contract: new_management_contract};
+  msgs = one_msg msg_to_scam_url;
+  send msgs
+end
+
+transition CallChangeManagerTrackingManagementContract(new_management_contract: ByStr20)
+  isManager _sender;
+  tracking_address <- manager_tracking_address;
+  msg_to_manager_tracking = {_tag: "ChangeManagementContract"; _recipient: tracking_address; _amount: zero; 
+  new_management_contract: new_management_contract};
+  msgs = one_msg msg_to_manager_tracking;
+  send msgs
+end
+
+(*Change all 3 contracts' management contract to new_management_contract*)
+transition CallChangeAllManagementContract(new_management_contract: ByStr20)
   isManager _sender;
   token_address <- scam_token_address;
   msg_to_scam_token = {_tag: "ChangeManagementContract"; _recipient: token_address; _amount: zero; 

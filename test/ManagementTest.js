@@ -153,7 +153,7 @@ describe('Management', function () {
     const callTx = await deployedScamToken.ChangeManagementContract(acc0, {new_management_contract: deployedManagementAddress});
     const callTx2 = await deployedScamURL.ChangeManagementContract(acc0, {new_management_contract: deployedManagementAddress});
     const callTx3 = await deployedManagerTracking.ChangeManagementContract(acc0, {new_management_contract: deployedManagementAddress});
-    const callTx4 = await deployedManagement.CallChangeManagementContract(acc2, {new_management_contract: deployedManagementAddress});
+    const callTx4 = await deployedManagement.CallChangeAllManagementContract(acc2, {new_management_contract: deployedManagementAddress});
     assert(callTx4.receipt.success === true);
     const state = await deployedScamToken.getState();
     const state2 = await deployedScamURL.getState();
