@@ -150,33 +150,6 @@ procedure AuthorizedBurnIfSufficientBalance(burn_account: ByStr20, amount: Uint1
   end
 end
 
-(* @dev:   Moves an amount tokens from _sender to the recipient. Used by token_owner.  *)
-(* @dev:   Balance of recipient will increase. Balance of _sender will decrease.       *)
-(* @dev:   If balances less than amount, error                                         *)
-(* @param: to:     Address of the recipient whose balance is increased.                *)
-(* @param: amount: Amount of tokens to be sent.                                        *)
-procedure AuthorizedMoveIfSufficientBalance(from: ByStr20, to: ByStr20, amount: Uint128)
-  o_from_bal <- balances[from];
-  bal = get_val o_from_bal;
-  can_do = uint128_le amount bal;
-  match can_do with
-  | True =>
-    (* Subtract amount from from and add it to to address *)
-    new_from_bal = builtin sub bal amount;
-    balances[from] := new_from_bal;
-    (* Adds amount to to address *)
-    get_to_bal <- balances[to];
-    new_to_bal = match get_to_bal with
-    | Some bal => builtin add bal amount
-    | None => amount
-    end;
-    balances[to] := new_to_bal
-  | False =>
-    (* Balance not sufficient *)
-    err = CodeInsufficientFunds;
-    ThrowError err
-  end
-end
 
 (***************************************)
 (*             Transitions             *)

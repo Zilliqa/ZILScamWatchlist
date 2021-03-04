@@ -27,17 +27,26 @@ fun (msg3 : Message) =>
 (* Error events *)
 type Error =
 | CodeIsNotManager
+| CodeIsNotAdmin
+| CodeAdminExists
+| CodeAdminNotExists
 | CodeManagerExists
 | CodeManagerNotExists
+| CodeIsNotAdminOrManager
+
 
 
 let make_error =
   fun (result : Error) =>
     let result_code = 
       match result with
-      | CodeIsNotManager     => Int32 -1
-      | CodeManagerExists    => Int32 -2
-      | CodeManagerNotExists => Int32 -3
+      | CodeIsNotManager         => Int32 -1
+      | CodeIsNotAdmin           => Int32 -2
+      | CodeAdminExists          => Int32 -3
+      | CodeAdminNotExists       => Int32 -4
+      | CodeManagerExists        => Int32 -5
+      | CodeManagerNotExists     => Int32 -6
+      | CodeIsNotAdminOrManager  => Int32 -7
       end
     in
     { _exception : "Error"; code : result_code }
@@ -64,16 +73,20 @@ contract ScamManagement
   init_scam_token_address: ByStr20,
   init_scam_url_address: ByStr20,
   init_manager_tracking_address: ByStr20,
-  init_manager: ByStr20
+  init_admin: ByStr20
 )
 
 (* Mutable fields *)
 
 (* List of minters available *)
-field managers: Map ByStr20 Unit 
+
+field admins: Map ByStr20 Unit 
   = let emp_map = Emp ByStr20 Unit in
     let authorize = Unit in
-    builtin put emp_map init_manager authorize
+    builtin put emp_map init_admin authorize
+    
+field managers: Map ByStr20 Unit 
+  = Emp ByStr20 Unit 
     
 field scam_token_address: ByStr20 = init_scam_token_address
 
@@ -89,6 +102,19 @@ procedure ThrowError(err : Error)
   throw e
 end
 
+(* @dev:   Checks if address is in admin list                   *)
+(* @param: manager: Address of the admin to be checked          *)
+(* Returns error event CodeIsNotAdmin if admin is not in list   *)
+procedure isAdmin(address: ByStr20)
+  some_admin <- admins[address];
+  match some_admin with
+  | None =>
+    err = CodeIsNotAdmin;
+    ThrowError err   
+  | Some val => 
+  end
+end
+
 (* @dev:   Checks if address is in manager list                   *)
 (* @param: manager: Address of the manager to be checked          *)
 (* Returns error event CodeIsNotManager if manager is not in list *)
@@ -102,15 +128,68 @@ procedure isManager(address: ByStr20)
   end
 end
 
+procedure isAdminOrManager(address: ByStr20)
+  some_manager <- managers[address];
+  match some_manager with
+  | None =>
+    some_admin <- admins[address];
+    match some_admin with
+    | None =>
+      err = CodeIsNotAdminOrManager;
+      ThrowError err   
+    | Some val => 
+    end  
+  | Some val => 
+  end
+end
+
+
 (***************************************)
 (*             Transitions             *)
 (***************************************)
+
+(* @dev:   Add approved admins. Only existing admins can add admins. *)
+(* @param: admin: Address of the admin to be approved                  *)
+(* Returns error event CodeAdminExists if admin already approved       *)
+transition AddAdmins(admin: ByStr20)
+  isAdmin _sender;
+  some_admin <- admins[admin];
+  match some_admin with
+  | Some val => 
+    err = CodeAdminExists;
+    ThrowError err
+  | None =>
+    authorize = Unit;
+    admins[admin] := authorize;
+    (* Emit success event *)
+    e = {_eventname: "AddAdminSuccess"; admin: admin};
+    event e
+  end
+end
+
+(* @dev:   Remove approved admins. Only existing admins can remove managers. *)
+(* @param: admin: Address of the admin to be remove                          *)
+(* Returns error event CodeAdminNotExists if admin is already not approved   *)
+transition RemoveAdmins(admin: ByStr20)
+  isAdmin _sender;
+  some_admin <- admins[admin];
+  match some_admin with
+  | Some val => 
+    delete admins[admin];
+    (* Emit success event *)
+    e = {_eventname: "RemoveAdminSuccess"; admin: admin};
+    event e
+  | None =>
+    err = CodeAdminNotExists;
+    ThrowError err
+  end
+end
 
 (* @dev:   Add approved managers. Only existing managers can add managers. *)
 (* @param: manager: Address of the manager to be approved                  *)
 (* Returns error event CodeManagerExists if manager already approved       *)
 transition AddManagers(manager: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   some_manager <- managers[manager];
   match some_manager with
   | Some val => 
@@ -129,7 +208,7 @@ end
 (* @param: manager: Address of the manager to be remove                          *)
 (* Returns error event CodeManagerNotExists if manager is already not approved   *)
 transition RemoveManagers(manager: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   some_manager <- managers[manager];
   match some_manager with
   | Some val => 
@@ -146,7 +225,7 @@ end
 (* @dev:   Change scam_token_address field to new_scam_token_address   *)
 (* @param: new_scam_token_address: scam token address to be changed to *)
 transition ChangeScamTokenAddress(new_scam_token_address: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   scam_token_address := new_scam_token_address;
   e = {_eventname: "ChangedScamTokenAddress"; new_scam_token_address: new_scam_token_address};
   event e  
@@ -155,7 +234,7 @@ end
 (* @dev:   Change scam_url_address field to new_scam_url_address   *)
 (* @param: new_scam_url_address: scam url address to be changed to *)
 transition ChangeScamURLAddress(new_scam_url_address: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   scam_url_address := new_scam_url_address;
   e = {_eventname: "ChangedScamURLAddress"; new_scam_url_address: new_scam_url_address};
   event e  
@@ -164,7 +243,7 @@ end
 (* @dev:   Change manager_tracking_address field to new_manager_tracking_address   *)
 (* @param: new_manager_tracking_address: new manager_tracking address to be changed to *)
 transition ChangeManagerTrackingAddress(new_manager_tracking_address: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   manager_tracking_address := new_manager_tracking_address;
   e = {_eventname: "ChangedManagerTrackingAddress"; new_manager_tracking_address: new_manager_tracking_address};
   event e  
@@ -174,7 +253,7 @@ end
 
 (*Change all 3 contracts' management contract to new_management_contract*)
 transition CallChangeScamManagementContract(new_management_contract: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   token_address <- scam_token_address;
   msg_to_scam_token = {_tag: "ChangeManagementContract"; _recipient: token_address; _amount: zero; 
   new_management_contract: new_management_contract};
@@ -183,7 +262,7 @@ transition CallChangeScamManagementContract(new_management_contract: ByStr20)
 end
 
 transition CallChangeScamURLManagementContract(new_management_contract: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   url_address <- scam_url_address;
   msg_to_scam_url = {_tag: "ChangeManagementContract"; _recipient: url_address; _amount: zero; 
   new_management_contract: new_management_contract};
@@ -192,7 +271,7 @@ transition CallChangeScamURLManagementContract(new_management_contract: ByStr20)
 end
 
 transition CallChangeManagerTrackingManagementContract(new_management_contract: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   tracking_address <- manager_tracking_address;
   msg_to_manager_tracking = {_tag: "ChangeManagementContract"; _recipient: tracking_address; _amount: zero; 
   new_management_contract: new_management_contract};
@@ -202,7 +281,7 @@ end
 
 (*Change all 3 contracts' management contract to new_management_contract*)
 transition CallChangeAllManagementContract(new_management_contract: ByStr20)
-  isManager _sender;
+  isAdmin _sender;
   token_address <- scam_token_address;
   msg_to_scam_token = {_tag: "ChangeManagementContract"; _recipient: token_address; _amount: zero; 
   new_management_contract: new_management_contract};
@@ -217,7 +296,7 @@ transition CallChangeAllManagementContract(new_management_contract: ByStr20)
 end
 
 transition CallMint(recipient: ByStr20, amount: Uint128)
-  isManager _sender;
+  isAdminOrManager _sender;
   address <- scam_token_address;
   msg_to_scam_token = {_tag: "Mint"; _recipient: address; _amount: zero; recipient: recipient; amount: amount};
   msgs = one_msg msg_to_scam_token;
@@ -225,7 +304,7 @@ transition CallMint(recipient: ByStr20, amount: Uint128)
 end
 
 transition CallBurn(burn_account: ByStr20, amount: Uint128)
-  isManager _sender;
+  isAdminOrManager _sender;
   address <- scam_token_address;
   msg_to_scam_token = {_tag : "Burn"; _recipient : address; _amount : zero; 
                     burn_account : burn_account; amount : amount};
@@ -236,7 +315,7 @@ end
 (* call transitions in ScamURL contract*)
 
 transition CallAddURL(url: String, category: String)
-  isManager _sender;
+  isAdminOrManager _sender;
   address <- scam_url_address;
   msg_to_scam_url = {_tag : "AddURL"; _recipient : address; _amount : zero; 
                   url: url; category: category};
@@ -245,7 +324,7 @@ transition CallAddURL(url: String, category: String)
 end
 
 transition CallRemoveURL(url: String)
-  isManager _sender;
+  isAdminOrManager _sender;
   address <- scam_url_address;
   msg_to_scam_url = {_tag : "RemoveURL"; _recipient : address; _amount : zero; 
                   url: url};
@@ -254,7 +333,7 @@ transition CallRemoveURL(url: String)
 end
 
 transition CallAddDomain(domain: String, category: String)
-  isManager _sender;
+  isAdminOrManager _sender;
   address <- scam_url_address;
   msg_to_scam_url = {_tag : "AddDomain"; _recipient : address; _amount : zero; 
                   domain: domain; category: category};
@@ -263,7 +342,7 @@ transition CallAddDomain(domain: String, category: String)
 end
 
 transition CallRemoveDomain(domain: String)
-  isManager _sender;
+  isAdminOrManager _sender;
   address <- scam_url_address;
   msg_to_scam_url = {_tag : "RemoveDomain"; _recipient : address; _amount : zero; 
                   domain: domain};
@@ -274,7 +353,7 @@ end
 (* call transitions in ManagerTracking contract*)
 
 transition CallAddAdmin(user_id: String, role: String)
-  isManager _sender;
+  isAdminOrManager _sender;
   address <- manager_tracking_address;
   msg_to_manager_tracking = {_tag : "AddAdmin"; _recipient : address; _amount : zero; 
                   user_id: user_id; role: role};
@@ -283,7 +362,7 @@ transition CallAddAdmin(user_id: String, role: String)
 end
 
 transition CallRemoveAdmin(user_id: String)
-  isManager _sender;
+  isAdminOrManager _sender;
   address <- manager_tracking_address;
   msg_to_manager_tracking = {_tag : "RemoveAdmin"; _recipient : address; _amount : zero; 
                   user_id: user_id};

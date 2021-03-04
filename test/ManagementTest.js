@@ -120,7 +120,7 @@ describe('Management', function () {
         init_scam_token_address: deployedScamTokenAddress,
         init_scam_url_address: deployedScamURLAddress,
         init_manager_tracking_address: deployedManagerTrackingAddress,
-        init_manager: acc2
+        init_admin: acc2
       }
     );
 
@@ -131,13 +131,65 @@ describe('Management', function () {
     deployedManagement = Test.deployedContracts[deployedManagementAddress];
   });
 
-  it('Add manager to manager list', async function () {
+  it('non-admin cannot add admin to admin list', async function () {
     //assert(state.managers.has(Test.accounts[2].address.toLowerCase()));
+    const callTx = await deployedManagement.AddAdmins(acc1, { admin: acc3});
+    assert(callTx.receipt.success === false);
+  });  
+
+  it('non-admin cannot add manager to maanger list', async function () {
+    //assert(state.managers.has(Test.accounts[2].address.toLowerCase()));
+    const callTx = await deployedManagement.AddManagers(acc1, { manager: acc3});
+    assert(callTx.receipt.success === false);
+  });  
+
+  it('non-admin cannot call Mint transition in ScamTokenContract', async function () {
+    //acc0: 10000
+    const callTx = await deployedManagement.CallMint(acc1, { recipient: acc2, amount: "2000" });
+    assert(callTx.receipt.success === false);
+  });
+
+  it('admin can add admin to admin list', async function () {
+    const callTx = await deployedManagement.AddAdmins(acc2, { admin: acc1});
+    assert(callTx.receipt.success === true);
+    const state = await deployedManagement.getState();
+    expect(state.admins).to.have.property(acc1.toLowerCase());
+    //admins (1,2)
+  });  
+
+  it('admin can add manager to manager list', async function () {
     const callTx = await deployedManagement.AddManagers(acc2, { manager: acc3});
     assert(callTx.receipt.success === true);
     const state = await deployedManagement.getState();
-    assert(state.managers[acc3.toLowerCase()].constructor.toLowerCase()==='unit');
-    
+    expect(state.managers).to.have.property(acc3.toLowerCase());
+    //admins (1,2)
+    //managers(3)
+  });  
+
+  it('manager cannot add manager to manager list', async function () {
+    const callTx = await deployedManagement.AddManagers(acc3, { manager: acc2});
+    assert(callTx.receipt.success === false);
+  }); 
+
+  it('manager cannot remove manager from manager list', async function () {
+    const callTx = await deployedManagement.RemoveManagers(acc3, { manager: acc3});
+    assert(callTx.receipt.success === false);
+  }); 
+
+  it('manager cannot remove admin from admin list', async function () {
+    const callTx = await deployedManagement.RemoveAdmins(acc3, { manager: acc2});
+    assert(callTx.receipt.success === false);
+  });  
+
+  it('Remove admin from admin list', async function () {
+    const state = await deployedManagement.getState();
+    expect(state.admins).to.have.property(acc1.toLowerCase());
+    const callTx = await deployedManagement.RemoveAdmins(acc2, { admin: acc1});
+    assert(callTx.receipt.success === true);
+    const state2 = await deployedManagement.getState();
+    expect(state2.admins).to.not.have.property(acc1.toLowerCase());
+    //admins (2)
+    //managers (3)
   });
 
   it('Remove manager from manager list', async function () {
@@ -147,26 +199,45 @@ describe('Management', function () {
     assert(callTx.receipt.success === true);
     const state2 = await deployedManagement.getState();
     expect(state2.managers).to.not.have.property(acc3.toLowerCase());
+
+    const callTx2 = await deployedManagement.AddManagers(acc2, { manager: acc3});
+    assert(callTx2.receipt.success === true);
+    const state3 = await deployedManagement.getState();
+    expect(state3.managers).to.have.property(acc3.toLowerCase());
+    //admins (2)
+    //managers (1)
   });
 
-  it('Change management contract for all 3 contracts', async function () {
+  it('Manager cannot change management contract for all 3 contracts', async function () {
     const callTx = await deployedScamToken.ChangeManagementContract(acc0, {new_management_contract: deployedManagementAddress});
     const callTx2 = await deployedScamURL.ChangeManagementContract(acc0, {new_management_contract: deployedManagementAddress});
     const callTx3 = await deployedManagerTracking.ChangeManagementContract(acc0, {new_management_contract: deployedManagementAddress});
-    const callTx4 = await deployedManagement.CallChangeAllManagementContract(acc2, {new_management_contract: deployedManagementAddress});
-    assert(callTx4.receipt.success === true);
+    const callTx4 = await deployedManagement.CallChangeAllManagementContract(acc1, {new_management_contract: deployedManagementAddress});
+    assert(callTx4.receipt.success === false);
+  });
+
+  it('Admin can change management contract for all 3 contracts', async function () {
+    const callTx = await deployedManagement.CallChangeAllManagementContract(acc2, {new_management_contract: deployedManagementAddress});
+    assert(callTx.receipt.success === true);
     const state = await deployedScamToken.getState();
     const state2 = await deployedScamURL.getState();
     const state3 = await deployedManagerTracking.getState();
     assert(state.management_contract === deployedManagementAddress.toLowerCase());
     assert(state2.management_contract === deployedManagementAddress.toLowerCase());
     assert(state3.management_contract === deployedManagementAddress.toLowerCase());
-
   });
 
-  it('Calls Mint transition in ScamTokenContract', async function () {
+  it('Admin calls Mint transition in ScamTokenContract', async function () {
     //acc0: 10000
-    const callTx = await deployedManagement.CallMint(acc2, { recipient: acc2, amount: "2000" });
+    const callTx = await deployedManagement.CallMint(acc2, { recipient: acc2, amount: "1000" });
+    assert(callTx.receipt.success === true);
+    const state = await deployedScamToken.getState();
+    assert(state.balances[acc2.toLowerCase()]=== "1000");
+  });
+
+  it('Manager calls Mint transition in ScamTokenContract', async function () {
+    //acc0: 10000
+    const callTx = await deployedManagement.CallMint(acc3, { recipient: acc2, amount: "1000" });
     assert(callTx.receipt.success === true);
     const state = await deployedScamToken.getState();
     assert(state.balances[acc2.toLowerCase()]=== "2000");
@@ -179,26 +250,6 @@ describe('Management', function () {
     const state = await deployedScamToken.getState();
     assert(state.balances[acc0.toLowerCase()]=== "9000");
   });
-
-  /*it('Calls Transfer transition in ScamTokenContract', async function () {
-    //acc0: 9000, acc2: 2000
-    const callTx = await deployedManagement.callTransfer(acc2, { to: acc0, amount: "1000", initiator: acc2});
-    assert(callTx.receipt.success === true);
-    const state = await deployedScamToken.getState();
-    assert(state.balances[acc0.toLowerCase()]=== "10000");
-    assert(state.balances[acc2.toLowerCase()]=== "1000");
-  });
-
-  it('Calls Transfer from transition in ScamTokenContract', async function () {
-    //acc0: 10000, acc2: 1000
-    const callTx = await deployedManagement.callMint(acc2, { recipient: acc1, amount: "1000" });
-    //acc0: 10000, acc1: 1000 acc2: 1000
-    const callTx2 = await deployedManagement.callTransferFrom(acc2, { from: acc2, to: acc1, amount: "500", initiator: acc2});
-    assert(callTx2.receipt.success === true);
-    const state = await deployedScamToken.getState();
-    assert(state.balances[acc1.toLowerCase()]=== "1500");
-    assert(state.balances[acc2.toLowerCase()]=== "500");
-  });*/
 
   it('Calls AddURL transition in ScamURLContract', async function () {
     const callTx = await deployedManagement.CallAddURL(acc2, { url: "google.com/horses", category: "phishing" });
