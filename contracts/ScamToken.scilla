@@ -170,12 +170,7 @@ end
 (* @param: amount:    Number of tokens to be minted.                          *)
 transition Mint(recipient: ByStr20, amount: Uint128)
   IsManagementContract _sender;
-  AuthorizedMint recipient amount;
-    (* Prevent sending to a contract address that does not support transfers of token *)
-  msg_to_recipient = {_tag: "RecipientAcceptMint"; _recipient: recipient; _amount: zero; 
-                      minter: _sender; recipient: recipient; amount: amount};
-  msgs = one_msg msg_to_recipient;
-  send msgs
+  AuthorizedMint recipient amount
 end
 
 (* @dev:   Burn existing tokens.                                                   *)
@@ -183,11 +178,7 @@ end
 (* @param: amount:       Number of tokens to be burned.                            *)
 transition Burn(burn_account: ByStr20, amount: Uint128)
   IsManagementContract _sender;
-  AuthorizedBurnIfSufficientBalance burn_account amount;
-  msg_to_sender = {_tag : "BurnSuccessCallBack"; _recipient : burn_account; _amount : zero; 
-                    burner : _sender; burn_account : burn_account; amount : amount};
-  msgs = one_msg msg_to_sender;
-  send msgs
+  AuthorizedBurnIfSufficientBalance burn_account amount
 end
 
 (* Unreachable transitions to conform to ZRC2-specifications *)
