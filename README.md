@@ -31,10 +31,14 @@ Allows ZIlliqa admins to add or remove verified Zilliqa telegram ids to a mappin
 Any user can then check whether a telegram user they are interacting with is a verified Zilliqa personnel on https://security.zilliqa.com/
 
 
+go to http://localhost/
 
 ## Test
-/test
+
+```
+cd test
 
 Test all contracts: npm test
 
-Test each contract: mocha -timeout 100000 "testfilename" 
+Test each contract: mocha -timeout 100000 "test_filename" 
+```
