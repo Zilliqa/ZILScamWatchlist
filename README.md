@@ -37,8 +37,16 @@ go to http://localhost/
 
 ```
 cd test
+```
 
-Test all contracts: npm test
+### Test all contracts
 
-Test each contract: mocha -timeout 100000 "test_filename" 
+```
+npm test
+```
+
+### Test each contract
+
+```
+mocha -timeout 100000 "test_filename" 
 ```
